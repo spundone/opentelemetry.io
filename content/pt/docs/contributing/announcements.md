@@ -2,7 +2,7 @@
 title: Anúncios
 description: Crie anúncios ou banners para eventos especiais.
 weight: 50
-default_lang_commit: aab27c8f1bb4c72c4ba94920396ef1fd6de1434e
+default_lang_commit: 3c96d90486204d2ebebb2d88f146fb650a0b5fab
 drifted_from_default: true
 ---
 

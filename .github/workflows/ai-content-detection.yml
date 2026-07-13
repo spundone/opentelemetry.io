@@ -39,6 +39,8 @@ on:
 
 jobs:
   analyze:
+    # Only run in upstream repository; forks lack the bot app variables and secrets.
+    if: github.repository == 'open-telemetry/opentelemetry.io'
     name: 'Analyze PR'
     runs-on: ubuntu-latest
     permissions:

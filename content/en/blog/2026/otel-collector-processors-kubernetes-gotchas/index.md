@@ -1,15 +1,15 @@
 ---
 title: >-
-  The gotchas of OpenTelemetry Collector processors for effective
-  observability in Kubernetes
+  The gotchas of OpenTelemetry Collector processors for effective observability
+  in Kubernetes
 linkTitle: Collector processor gotchas in K8s
 date: 2026-07-09
 author: >-
-  [Sanket Rajgiri](https://github.com/Sanket-Rajgiri) (SRE@One2N),
-  [Spandan Ghosh](https://github.com/spundone) (Content@One2N)
+  [Sanket Rajgiri](https://github.com/Sanket-Rajgiri) (SRE@One2N), [Spandan
+  Ghosh](https://github.com/spundone) (Content@One2N)
 canonical_url: https://one2n.io/blog/the-gotchas-of-otel-collector-processors-for-effective-observability-in-kubernetes
 draft: true
-cSpell:ignore: GOMEMLIMIT k8sattributes
+cSpell:ignore: Ghosh GOMEMLIMIT k8sattributes Rajgiri Sanket Spandan
 ---
 
 If you've read our post on
@@ -19,9 +19,9 @@ But here's what we didn't cover: how to actually make observability work at
 scale.
 
 At [One2N](https://one2n.io), we run [OpenTelemetry Collector](/docs/collector/)
-instances on production Kubernetes clusters every day. Collecting data turned out
-to be just the first step. The real challenge is handling that data reliably,
-cost-effectively, and at volume.
+instances on production Kubernetes clusters every day. Collecting data turned
+out to be just the first step. The real challenge is handling that data
+reliably, cost-effectively, and at volume.
 
 This blog tries to address these challenges. Some of the takeaways we would like
 to focus on are:
@@ -40,8 +40,9 @@ to focus on are:
 Rate limiting was the first thing I ran into. The collector was sending every
 single span as an individual HTTP request to the backend. Seemed fine at first.
 Then during load testing, the backend started throwing 429 errors. Rate
-limiting. I was losing spans. The issue? Without batching, a collector can easily fire off
-thousands of requests per second, and no backend is happy about that.
+limiting. I was losing spans. The issue? Without batching, a collector can
+easily fire off thousands of requests per second, and no backend is happy about
+that.
 
 The fix is the [`batch` processor](/docs/collector/configuration/#processors).
 Add it to the end of your pipeline, right after all your filtering and sampling
@@ -70,8 +71,8 @@ made and kept us under quota.
 ## Problem 2: Memory spikes and collector crashes
 
 A few days into a production rollout, we noticed our collector pods were
-restarting more frequently than expected. I checked the Kubernetes events for the affected pods
-and saw that they were getting OOMKilled left and right.
+restarting more frequently than expected. I checked the Kubernetes events for
+the affected pods and saw that they were getting OOMKilled left and right.
 
 Digging deeper, I found that restarts spiked between 1 PM and 3 PM which was the
 same window when our application traffic peaked.
@@ -97,8 +98,8 @@ The processor checks memory usage every 5 seconds. When usage crosses the soft
 limit (`limit_mib` - `spike_limit_mib`), it starts rejecting new data by
 returning errors to the previous component in the pipeline.
 
-If usage continues to climb and breaches the hard limit (`limit_mib`), it goes
-a step further, forcing garbage collection to be performed. This gave the
+If usage continues to climb and breaches the hard limit (`limit_mib`), it goes a
+step further, forcing garbage collection to be performed. This gave the
 collector room to breathe. Instead of crashing, it sheds excess load and
 recovered quickly.
 
@@ -111,7 +112,7 @@ the collector's limits to find a balance between stability and data fidelity.
 > The `memory_limiter` processor should be placed first in the pipeline. This
 > ensures that backpressure can reach upstream receivers, minimizing the
 > likelihood of dropped data when memory limits are triggered.
-
+>
 > Since the OpenTelemetry Collector is written in Go, we set the `GOMEMLIMIT`
 > environment variable to align Go's garbage collector with our `limit_mib`.
 > This ensures Go's internal memory management respects the Collector's
@@ -164,8 +165,7 @@ processors:
       - sources:
           - from: resource_attribute
             name: k8s.pod.ip
-    extract:
-      metadata
+    extract: metadata
 ```
 
 This attaches metadata like namespace, pod name, and deployment to each span and
@@ -303,9 +303,9 @@ broken traces that told only half the story.
 **The real fix was setting up distributed enrichment + centralized tail
 sampling**
 
-We redesigned our collector pipeline, so all spans from a single trace
-always land on the same collector instance. We route by trace ID. This way the collector sees the
-complete picture before deciding what to keep.
+We redesigned our collector pipeline, so all spans from a single trace always
+land on the same collector instance. We route by trace ID. This way the
+collector sees the complete picture before deciding what to keep.
 
 Think of it like this: you wouldn't have two judges review halves of the same
 case separately and each make a conviction decision. You'd have them look at the
@@ -314,8 +314,8 @@ whole case together. Same idea here.
 ## The final architecture: using DaemonSets
 
 Here's the architecture we landed on for production workloads. We deploy
-collectors as DaemonSets: basically one collector living on each Kubernetes node,
-hanging out close to the actual applications.
+collectors as DaemonSets: basically one collector living on each Kubernetes
+node, hanging out close to the actual applications.
 
 ![Telemetry data flow after re-architecture](rearchitected-data-flow.png)
 
@@ -338,9 +338,9 @@ traces? Those go to a central collector for the next layer of processing.
 **One thing to watch:**
 
 If you attach fancy high-cardinality attributes like `k8s.pod.id` or
-`k8s.node.ip` to everything, your payload size balloons. In autoscaling clusters, a pod ID
-you're sending might be dead by the time you look at it. **Be selective:** not
-every signal needs every attribute.
+`k8s.node.ip` to everything, your payload size balloons. In autoscaling
+clusters, a pod ID you're sending might be dead by the time you look at it. **Be
+selective:** not every signal needs every attribute.
 
 ![How data flows in DaemonSet collectors](daemonset-collector-flow.png)
 
@@ -359,8 +359,8 @@ It samples a baseline of normal traffic. Everything else gets dropped.
   telemetry early.
 - Spans are routed by `trace_id`, so all spans of a request stay together. This
   keeps traces complete and easy to analyze.
-- Tail sampling happens centrally after the full trace is collected. This
-  allows smart decisions based on errors and latency.
+- Tail sampling happens centrally after the full trace is collected. This allows
+  smart decisions based on errors and latency.
 
 With this setup, we kept all required metadata while sending only meaningful
 traces to the backend. Errors and slow requests were always captured, while
@@ -372,8 +372,8 @@ triage, cleaner dashboards, and much lower ingest volumes.
 ## Before you build this, ask yourself
 
 **Is my trace volume high enough?** If you're sending under 50 traces per
-second, a single collector is probably fine. This two-tier setup adds complexity. Only
-worth it if you're drowning in data.
+second, a single collector is probably fine. This two-tier setup adds
+complexity. Only worth it if you're drowning in data.
 
 **What's my current observability bill looking like?** Measure how many GB per
 day you're sending. Tail sampling usually cuts this by 40–70%. The
@@ -391,13 +391,12 @@ it's not trivial either. Make sure your team's ready.
 
 ## Conclusion
 
-Here's what we learned the hard way: building observability at scale
-isn't about the tools or the configuration. It's about understanding your
-data—how it flows through your system, what matters, what's noise. The two-tier
-architecture we're sharing here came from trial and error on live clusters. It
-filters out garbage at the edge, enriches data where it makes sense, and makes
-intelligent decisions about sampling in the center. That's the pattern that
-actually works.
+Here's what we learned the hard way: building observability at scale isn't about
+the tools or the configuration. It's about understanding your data—how it flows
+through your system, what matters, what's noise. The two-tier architecture we're
+sharing here came from trial and error on live clusters. It filters out garbage
+at the edge, enriches data where it makes sense, and makes intelligent decisions
+about sampling in the center. That's the pattern that actually works.
 
 In our case, we addressed challenges such as rate limits, noisy telemetry, high
 trace volumes, and missing metadata by **redesigning the collector
@@ -419,6 +418,6 @@ the full lifecycle of production systems: designing observability pipelines,
 tuning collector architectures on Kubernetes, reducing on-call load, and
 hardening systems under real traffic.
 
-The patterns in this post come from that experience of helping teams navigate the same
-trade-offs between collector stability and data fidelity, ingest cost and
-debuggability, and pipeline complexity and incident response time.
+The patterns in this post come from that experience of helping teams navigate
+the same trade-offs between collector stability and data fidelity, ingest cost
+and debuggability, and pipeline complexity and incident response time.
